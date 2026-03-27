@@ -394,11 +394,11 @@ function getPerkTheme(tone: Outcome["tone"]) {
     icon: Archive,
     wrapper:
       "border-[#B56666]/28 bg-[linear-gradient(135deg,rgba(182,102,102,0.18),rgba(80,28,28,0.14))]",
-      iconWrap: "bg-[#C65A5A]/16 text-[#F3C1C1] border border-[#C65A5A]/25",
-      eyebrow: "text-[#F3C1C1]",
-      body: "text-[#F6D7D7]",
-    };
-  }
+    iconWrap: "bg-[#C65A5A]/16 text-[#F3C1C1] border border-[#C65A5A]/25",
+    eyebrow: "text-[#F3C1C1]",
+    body: "text-[#F6D7D7]",
+  };
+}
 
 function NorthstarLogo({ compact = false }: { compact?: boolean }) {
   return (
@@ -583,13 +583,11 @@ export default function COOGamePrototype() {
           </div>
         </div>
       ) : (
-        <div className="relative mx-auto min-h-screen max-w-7xl px-6 py-6">
+        <div className="relative mx-auto max-w-7xl flex-1 px-6 py-6">
           <div className="mb-6 flex items-center justify-between">
             <NorthstarLogo compact />
-            <div className="flex items-center gap-3">
-              <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#A7B2BA]">
-                Scenario {Math.min(step + 1, scenarios.length)} / {scenarios.length}
-              </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#A7B2BA]">
+              Scenario {Math.min(step + 1, scenarios.length)} / {scenarios.length}
             </div>
           </div>
 
@@ -683,9 +681,7 @@ export default function COOGamePrototype() {
                     What happened next
                   </div>
                   <h3 className="mt-3 text-3xl font-semibold">Decision recorded</h3>
-                  <p className="mt-5 text-[15px] leading-8 text-[#31404d]">
-                    {selected.synopsis}
-                  </p>
+                  <p className="mt-5 text-[15px] leading-8 text-[#31404d]">{selected.synopsis}</p>
 
                   <div className="mt-8 grid gap-3 md:grid-cols-5">
                     {metricMeta.map((m) => {
@@ -694,10 +690,7 @@ export default function COOGamePrototype() {
                       const neutral = delta === 0;
 
                       return (
-                        <div
-                          key={m.key}
-                          className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4"
-                        >
+                        <div key={m.key} className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4">
                           <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
                             {m.label}
                           </div>
@@ -758,22 +751,16 @@ export default function COOGamePrototype() {
                         <div className="text-xs uppercase tracking-[0.18em] text-[#A7B2BA]">
                           Leadership readout
                         </div>
-                        <p className="mt-4 text-sm leading-7 text-[#E5EAED]">
-                          {outcome.readout}
-                        </p>
+                        <p className="mt-4 text-sm leading-7 text-[#E5EAED]">{outcome.readout}</p>
                       </div>
 
                       <div className={`mt-6 rounded-[24px] p-6 ${perkTheme.wrapper}`}>
                         <div className="flex items-start gap-4">
-                          <div
-                            className={`flex h-12 w-12 items-center justify-center rounded-2xl ${perkTheme.iconWrap}`}
-                          >
+                          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${perkTheme.iconWrap}`}>
                             <PerkIcon className="h-5 w-5" />
                           </div>
                           <div>
-                            <div
-                              className={`text-xs uppercase tracking-[0.18em] ${perkTheme.eyebrow}`}
-                            >
+                            <div className={`text-xs uppercase tracking-[0.18em] ${perkTheme.eyebrow}`}>
                               {outcome.perkTitle}
                             </div>
                             <p className={`mt-4 text-sm leading-7 ${perkTheme.body}`}>
@@ -825,10 +812,7 @@ export default function COOGamePrototype() {
 
                     <div className="mt-8 grid grid-cols-2 gap-3">
                       {metricMeta.map((m) => (
-                        <div
-                          key={`${m.key}-tile`}
-                          className="rounded-2xl border border-[#bfb6a7] bg-[#ece6da] p-4"
-                        >
+                        <div key={`${m.key}-tile`} className="rounded-2xl border border-[#bfb6a7] bg-[#ece6da] p-4">
                           <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
                             {m.label}
                           </div>
@@ -846,8 +830,8 @@ export default function COOGamePrototype() {
         </div>
       )}
 
-      <div className="relative z-10 border-t border-white/10 bg-[#0d1118]/70">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-5 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+      <footer className="relative z-10 border-t border-white/10 bg-[#0d1118]/70">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-4 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
           <div>You Are the COO · A product experiment by Nimish Raote</div>
           <a
             href="https://www.nimishraote.com"
@@ -859,7 +843,7 @@ export default function COOGamePrototype() {
             <ArrowUpRight className="h-4 w-4" />
           </a>
         </div>
-      </div>
+      </footer>
     </div>
   );
 }
