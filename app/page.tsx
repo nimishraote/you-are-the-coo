@@ -261,7 +261,9 @@ const initialScores = {
   risk: 50,
 };
 
-const metricMeta = [
+type MetricKey = keyof typeof initialScores;
+
+const metricMeta: { key: MetricKey; label: string }[] = [
   { key: "revenue", label: "Revenue" },
   { key: "morale", label: "Team morale" },
   { key: "trust", label: "Trust" },
@@ -450,7 +452,6 @@ function MetricBar({ label, value }: { label: string; value: number }) {
 
 export default function COOGamePrototype() {
   const [started, setStarted] = useState(false);
-  const [muted, setMuted] = useState(true);
   const [step, setStep] = useState(0);
   const [scores, setScores] = useState<ScoreState>(initialScores);
   const [selected, setSelected] = useState<ScenarioChoice | null>(null);
@@ -461,20 +462,6 @@ export default function COOGamePrototype() {
   const outcome = useMemo(() => getOutcome(scores), [scores]);
   const perkTheme = getPerkTheme(outcome.tone);
   const PerkIcon = perkTheme.icon;
-
-  useEffect(() => {
-    if (!started || muted) return;
-    const audio = new Audio(
-      "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8f6f7d8d4.mp3?filename=ambient-piano-logo-165357.mp3"
-    );
-    audio.volume = 0.08;
-    audio.loop = true;
-    audio.play().catch(() => {});
-
-    return () => {
-      audio.pause();
-    };
-  }, [started, muted]);
 
   const applyChoice = (choice: ScenarioChoice) => {
     setSelected(choice);
@@ -531,12 +518,6 @@ export default function COOGamePrototype() {
         <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-10">
           <div className="flex items-center justify-between">
             <NorthstarLogo />
-            <button
-              onClick={() => setMuted((m) => !m)}
-              className="rounded-full border border-white/10 bg-white/5 p-3 text-[#A7B2BA] transition hover:bg-white/10 hover:text-white"
-            >
-              {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-            </button>
           </div>
 
           <div className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.2fr_0.8fr]">
@@ -609,18 +590,16 @@ export default function COOGamePrototype() {
               <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#A7B2BA]">
                 Scenario {Math.min(step + 1, scenarios.length)} / {scenarios.length}
               </div>
-              <button
-                onClick={() => setMuted((m) => !m)}
-                className="rounded-full border border-white/10 bg-white/5 p-3 text-[#A7B2BA] transition hover:bg-white/10 hover:text-white"
-              >
-                {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
-              </button>
             </div>
           </div>
 
           <div className="mb-8 grid gap-4 md:grid-cols-5">
             {metricMeta.map((m) => (
-              <MetricBar key={m.key} label={m.label} value={scores[m.key as keyof typeof scores]} />
+              <MetricBar
+                key={m.key}
+                label={m.label}
+                value={scores[m.key as keyof typeof scores]}
+              />
             ))}
           </div>
 
@@ -704,7 +683,9 @@ export default function COOGamePrototype() {
                     What happened next
                   </div>
                   <h3 className="mt-3 text-3xl font-semibold">Decision recorded</h3>
-                  <p className="mt-5 text-[15px] leading-8 text-[#31404d]">{selected.synopsis}</p>
+                  <p className="mt-5 text-[15px] leading-8 text-[#31404d]">
+                    {selected.synopsis}
+                  </p>
 
                   <div className="mt-8 grid gap-3 md:grid-cols-5">
                     {metricMeta.map((m) => {
@@ -713,7 +694,10 @@ export default function COOGamePrototype() {
                       const neutral = delta === 0;
 
                       return (
-                        <div key={m.key} className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4">
+                        <div
+                          key={m.key}
+                          className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4"
+                        >
                           <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
                             {m.label}
                           </div>
@@ -774,16 +758,22 @@ export default function COOGamePrototype() {
                         <div className="text-xs uppercase tracking-[0.18em] text-[#A7B2BA]">
                           Leadership readout
                         </div>
-                        <p className="mt-4 text-sm leading-7 text-[#E5EAED]">{outcome.readout}</p>
+                        <p className="mt-4 text-sm leading-7 text-[#E5EAED]">
+                          {outcome.readout}
+                        </p>
                       </div>
 
                       <div className={`mt-6 rounded-[24px] p-6 ${perkTheme.wrapper}`}>
                         <div className="flex items-start gap-4">
-                          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${perkTheme.iconWrap}`}>
+                          <div
+                            className={`flex h-12 w-12 items-center justify-center rounded-2xl ${perkTheme.iconWrap}`}
+                          >
                             <PerkIcon className="h-5 w-5" />
                           </div>
                           <div>
-                            <div className={`text-xs uppercase tracking-[0.18em] ${perkTheme.eyebrow}`}>
+                            <div
+                              className={`text-xs uppercase tracking-[0.18em] ${perkTheme.eyebrow}`}
+                            >
                               {outcome.perkTitle}
                             </div>
                             <p className={`mt-4 text-sm leading-7 ${perkTheme.body}`}>
@@ -835,7 +825,10 @@ export default function COOGamePrototype() {
 
                     <div className="mt-8 grid grid-cols-2 gap-3">
                       {metricMeta.map((m) => (
-                        <div key={`${m.key}-tile`} className="rounded-2xl border border-[#bfb6a7] bg-[#ece6da] p-4">
+                        <div
+                          key={`${m.key}-tile`}
+                          className="rounded-2xl border border-[#bfb6a7] bg-[#ece6da] p-4"
+                        >
                           <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
                             {m.label}
                           </div>
@@ -850,6 +843,21 @@ export default function COOGamePrototype() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          <div className="mt-10 border-t border-white/10 bg-[#0d1118]/70">
+            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-1 py-5 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+              <div>You Are the COO · A product experiment by Nimish Raote</div>
+              <a
+                href="https://www.nimishraote.com"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-slate-300 transition hover:text-white"
+              >
+                Back to nimishraote.com
+                <ArrowUpRight className="h-4 w-4" />
+              </a>
+            </div>
+          </div>
         </div>
       )}
     </div>
