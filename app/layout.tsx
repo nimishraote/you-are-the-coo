@@ -3,10 +3,14 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "You Are the COO",
-  description: "A premium decision-based COO simulation set inside Northstar Cloud.",
+  description: "Run Northstar Cloud through pressure, trade-offs, and growth.",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en">
       <body>{children}</body>
