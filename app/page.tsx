@@ -843,21 +843,6 @@ export default function COOGamePrototype() {
               </motion.div>
             )}
           </AnimatePresence>
-
-          <div className="mt-10 border-t border-white/10 bg-[#0d1118]/70">
-            <div className="mx-auto flex max-w-7xl flex-col gap-3 px-1 py-5 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-              <div>You Are the COO · A product experiment by Nimish Raote</div>
-              <a
-                href="https://www.nimishraote.com"
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-2 text-slate-300 transition hover:text-white"
-              >
-                Back to nimishraote.com
-                <ArrowUpRight className="h-4 w-4" />
-              </a>
-            </div>
-          </div>
         </div>
       )}
 
