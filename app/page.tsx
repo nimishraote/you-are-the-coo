@@ -394,11 +394,11 @@ function getPerkTheme(tone: Outcome["tone"]) {
     icon: Archive,
     wrapper:
       "border-[#B56666]/28 bg-[linear-gradient(135deg,rgba(182,102,102,0.18),rgba(80,28,28,0.14))]",
-    iconWrap: "bg-[#C65A5A]/16 text-[#F3C1C1] border border-[#C65A5A]/25",
-    eyebrow: "text-[#F3C1C1]",
-    body: "text-[#F6D7D7]",
-  };
-}
+      iconWrap: "bg-[#C65A5A]/16 text-[#F3C1C1] border border-[#C65A5A]/25",
+      eyebrow: "text-[#F3C1C1]",
+      body: "text-[#F6D7D7]",
+    };
+  }
 
 function NorthstarLogo({ compact = false }: { compact?: boolean }) {
   return (
@@ -860,6 +860,21 @@ export default function COOGamePrototype() {
           </div>
         </div>
       )}
+
+      <div className="relative z-10 border-t border-white/10 bg-[#0d1118]/70">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-5 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+          <div>You Are the COO · A product experiment by Nimish Raote</div>
+          <a
+            href="https://www.nimishraote.com"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-2 text-slate-300 transition hover:text-white"
+          >
+            Back to nimishraote.com
+            <ArrowUpRight className="h-4 w-4" />
+          </a>
+        </div>
+      </div>
     </div>
   );
 }
