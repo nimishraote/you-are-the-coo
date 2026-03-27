@@ -262,7 +262,9 @@ const initialScores = {
   risk: 50,
 };
 
-const metricMeta = [
+type MetricKey = keyof typeof initialScores;
+
+const metricMeta: { key: MetricKey; label: string }[] = [
   { key: "revenue", label: "Revenue" },
   { key: "morale", label: "Team morale" },
   { key: "trust", label: "Trust" },
@@ -621,7 +623,7 @@ export default function COOGamePrototype() {
 
           <div className="mb-8 grid gap-4 md:grid-cols-5">
             {metricMeta.map((m) => (
-              <MetricBar key={m.key} label={m.label} value={scores[m.key]} />
+              <MetricBar key={m.key} label={m.label} value={scores[m.key as keyof typeof scores]} />
             ))}
           </div>
 
