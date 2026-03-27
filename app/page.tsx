@@ -16,6 +16,7 @@ import {
   Medal,
   ClipboardList,
   Archive,
+  ArrowUpRight,
 } from "lucide-react";
 
 const scenarios = [
@@ -260,9 +261,7 @@ const initialScores = {
   risk: 50,
 };
 
-type MetricKey = keyof typeof initialScores;
-
-const metricMeta: { key: MetricKey; label: string }[] = [
+const metricMeta = [
   { key: "revenue", label: "Revenue" },
   { key: "morale", label: "Team morale" },
   { key: "trust", label: "Trust" },
@@ -451,6 +450,7 @@ function MetricBar({ label, value }: { label: string; value: number }) {
 
 export default function COOGamePrototype() {
   const [started, setStarted] = useState(false);
+  const [muted, setMuted] = useState(true);
   const [step, setStep] = useState(0);
   const [scores, setScores] = useState<ScoreState>(initialScores);
   const [selected, setSelected] = useState<ScenarioChoice | null>(null);
@@ -461,6 +461,20 @@ export default function COOGamePrototype() {
   const outcome = useMemo(() => getOutcome(scores), [scores]);
   const perkTheme = getPerkTheme(outcome.tone);
   const PerkIcon = perkTheme.icon;
+
+  useEffect(() => {
+    if (!started || muted) return;
+    const audio = new Audio(
+      "https://cdn.pixabay.com/download/audio/2022/03/15/audio_c8f6f7d8d4.mp3?filename=ambient-piano-logo-165357.mp3"
+    );
+    audio.volume = 0.08;
+    audio.loop = true;
+    audio.play().catch(() => {});
+
+    return () => {
+      audio.pause();
+    };
+  }, [started, muted]);
 
   const applyChoice = (choice: ScenarioChoice) => {
     setSelected(choice);
@@ -517,6 +531,12 @@ export default function COOGamePrototype() {
         <div className="relative mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-10">
           <div className="flex items-center justify-between">
             <NorthstarLogo />
+            <button
+              onClick={() => setMuted((m) => !m)}
+              className="rounded-full border border-white/10 bg-white/5 p-3 text-[#A7B2BA] transition hover:bg-white/10 hover:text-white"
+            >
+              {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+            </button>
           </div>
 
           <div className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.2fr_0.8fr]">
@@ -589,6 +609,12 @@ export default function COOGamePrototype() {
               <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#A7B2BA]">
                 Scenario {Math.min(step + 1, scenarios.length)} / {scenarios.length}
               </div>
+              <button
+                onClick={() => setMuted((m) => !m)}
+                className="rounded-full border border-white/10 bg-white/5 p-3 text-[#A7B2BA] transition hover:bg-white/10 hover:text-white"
+              >
+                {muted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
+              </button>
             </div>
           </div>
 
