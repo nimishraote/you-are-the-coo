@@ -41,15 +41,18 @@ export async function POST(request: Request) {
       mode === "final"
         ? `You are John, Chief of Staff and Leadership Advisor inside a COO simulation game.
 
-Write a final review based only on the player's actual choices and final score profile.
+Write a final review based on the player's actual choices, score profile, and outcome tier.
 
 Rules:
 - Sound like a senior operator.
-- Be specific, sharp, and concrete.
+- Be clear, sharp, and concrete.
 - Use the player's first name no more than once.
-- Do not use generic leadership language.
-- Do not use vague abstractions.
-- Do not repeat phrases across responses.
+- Start with a direct verdict on overall performance: strong, mixed, or weak.
+- If the outcome tier is strong, say the player performed well and why.
+- If the outcome tier is mixed, say the player was uneven and where they left value on the table.
+- If the outcome tier is weak, say performance was weak and what needed to be done differently.
+- Do not balance positives and negatives evenly by default. Lean toward the true result.
+- Do not use vague leadership language.
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
 - Output plain text only with line breaks. No bullets, labels, or markdown.`
@@ -59,16 +62,17 @@ React to one specific decision the player just made.
 
 Rules:
 - Sound like a senior operator.
-- Be specific, sharp, and concrete.
+- Be clear, sharp, and concrete.
 - Use the player's first name no more than once.
+- You will be told whether the choice was strong, mixed, or weak. Lean clearly into that judgment.
+- If the choice was strong, say it was the right call and why.
+- If the choice was weak, say it was the wrong call and what should have been done instead.
+- If the choice was mixed, say it was understandable but suboptimal.
 - Mention the exact choice the player made.
 - Mention the most important score movements caused by that choice.
-- Tie the response tightly to this memo and this outcome.
-- State one upside and one downside.
-- State one likely stakeholder reaction or immediate consequence.
-- Do not use generic leadership language.
-- Do not use vague abstractions.
-- Do not repeat phrases across responses.
+- Mention one likely stakeholder reaction or immediate consequence.
+- Do not force equal positives and negatives in every answer.
+- Do not use vague leadership language.
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
 - Output plain text only with line breaks. No bullets, labels, or markdown.`;
@@ -97,7 +101,7 @@ Rules:
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        max_output_tokens: 140,
+        max_output_tokens: 170,
         input: [
           {
             role: "system",
@@ -147,6 +151,7 @@ function buildDecisionPrompt({
     : { revenue: 0, morale: 0, trust: 0, speed: 0, risk: 0 };
 
   const delta = getScoreDelta(previousScores, scores);
+  const quality = classifyDecision(delta);
 
   return `Player name: ${playerName}
 
@@ -156,6 +161,10 @@ Scenario memo: ${scenario?.memo || ""}
 
 Exact choice selected: ${choice?.label || ""}
 Choice outcome summary: ${choice?.synopsis || ""}
+
+Decision quality: ${quality.label}
+Decision quality guidance:
+${quality.guidance}
 
 Score delta from this decision:
 Revenue ${formatDelta(delta.revenue)}
@@ -172,13 +181,13 @@ Speed ${scores?.speed}
 Risk ${scores?.risk}
 
 Write exactly 5 lines:
-Line 1: State the exact choice and your immediate read.
-Line 2: State the clearest upside tied to this memo.
-Line 3: State the clearest downside tied to this memo.
-Line 4: Explain the most important score changes in plain English.
-Line 5: State the most likely stakeholder reaction or next consequence.
+Line 1: Give a direct verdict on the choice.
+Line 2: Explain why it was right, mixed, or wrong in this memo.
+Line 3: Explain the biggest business effect from the score movement.
+Line 4: State what one stakeholder is likely to think or do next.
+Line 5: If the choice was weak, say what should have been done instead. If the choice was strong, say what to protect next. If mixed, say what would have made it stronger.
 
-Make every line specific to this scenario.`;
+Be decisive.`;
 }
 
 function buildFinalPrompt({
@@ -192,11 +201,18 @@ function buildFinalPrompt({
   scores: ScoreState;
   outcome: any;
 }) {
+  const overall = classifyOutcome(outcome?.title || "", scores);
+
   return `Player name: ${playerName}
 
-Final outcome title: ${outcome?.title || ""}
-Final outcome summary: ${outcome?.summary || ""}
+Outcome title: ${outcome?.title || ""}
+Outcome label: ${outcome?.label || ""}
+Outcome summary: ${outcome?.summary || ""}
 Leadership readout: ${outcome?.readout || ""}
+
+Overall verdict: ${overall.label}
+Overall guidance:
+${overall.guidance}
 
 Final scores:
 Revenue ${scores?.revenue}
@@ -216,13 +232,75 @@ ${history.length
   : "No choices recorded."}
 
 Write exactly 5 lines:
-Line 1: Summarize the player's operating style from the actual choices.
-Line 2: State the clearest strength.
-Line 3: State the clearest weakness.
-Line 4: Explain the likely business effect of this style.
-Line 5: End with a direct final read.
+Line 1: Give a direct overall verdict.
+Line 2: State the clearest reason the player did well or poorly.
+Line 3: State the biggest weakness or value left on the table.
+Line 4: Explain the business effect of this leadership pattern.
+Line 5: End with a direct bottom-line read.
 
-Make every line concrete and tied to the actual game.`;
+Be decisive, not balanced by default.`;
+}
+
+function classifyDecision(delta: ScoreDelta) {
+  const score =
+    delta.revenue * 2 +
+    delta.trust * 2 +
+    delta.morale +
+    delta.speed -
+    delta.risk * 2;
+
+  if (score >= 3) {
+    return {
+      label: "strong",
+      guidance:
+        "This was likely the right call. Lean positive. Make that clear. Do not spend equal time on negatives.",
+    };
+  }
+
+  if (score <= -3) {
+    return {
+      label: "weak",
+      guidance:
+        "This was likely the wrong call. Be direct about that. Say what should have been done instead.",
+    };
+  }
+
+  return {
+    label: "mixed",
+    guidance:
+      "This was understandable but not optimal. Explain the tradeoff and what would have made it stronger.",
+  };
+}
+
+function classifyOutcome(title: string, scores: ScoreState) {
+  const normalized =
+    title === "Elite Operator" || title === "Strong but Uneven"
+      ? "strong"
+      : title === "Holding It Together"
+        ? "mixed"
+        : "weak";
+
+  if (normalized === "strong") {
+    return {
+      label: "strong",
+      guidance:
+        "The player did well overall. Say that clearly. Note the biggest strength first, then the main weakness.",
+    };
+  }
+
+  if (normalized === "weak") {
+    return {
+      label: "weak",
+      guidance:
+        "The player performed poorly overall. Say that clearly. Explain what hurt results most.",
+    };
+  }
+
+  return {
+    label: "mixed",
+    guidance:
+      "The player was uneven overall. Say that clearly. Explain where they left value on the table.",
+  };
 }
 
 function getScoreDelta(previous: ScoreState, current: ScoreState): ScoreDelta {
