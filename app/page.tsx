@@ -571,18 +571,12 @@ export default function COOGamePrototype() {
       }
 
       setJohnFeedback(data.text || "");
-    } catch (error) {
-      console.error(error);
-      const fallbackName = playerName.trim() || "there";
-      setJohnFeedback(
-        `${fallbackName}, this was a real operating call, not a cosmetic one.\n` +
-          `You solved the immediate issue in front of you, and that matters because pressure compounds fast in a company like this.\n` +
-          `The upside is clear in the near term, but the second-order effect is where I would keep looking.\n` +
-          `Different leaders around you will read this choice differently, especially if they were already tense going in.\n` +
-          `What I am watching most is the pattern behind your decisions, not just this one moment.\n` +
-          `If this becomes your default move under pressure, it will shape how the company experiences your leadership.\n` +
-          `Go into the next situation assuming the visible problem is only part of the real story.`
-      );
+    } catch (error: any) {
+  console.error(error);
+  setJohnFeedback(`API error: ${error?.message || "Unknown error"}`);
+} finally {
+  setJohnLoading(false);
+};
     } finally {
       setJohnLoading(false);
     }
