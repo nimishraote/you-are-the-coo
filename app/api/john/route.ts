@@ -45,14 +45,15 @@ Write a final review based on the player's actual choices, score profile, and ou
 
 Rules:
 - Sound like a senior operator.
-- Be clear, sharp, and concrete.
-- Use the player's first name no more than once.
-- Start with a direct verdict on overall performance: strong, mixed, or weak.
+- Be clear, sharp, concrete, and direct.
+- Use the player's first name no more than once, and never in the first line.
+- Start with a plain verdict on overall performance: strong, mixed, or weak.
+- Lean clearly into the true result. Do not balance positives and negatives evenly by default.
 - If the outcome tier is strong, say the player performed well and why.
 - If the outcome tier is mixed, say the player was uneven and where they left value on the table.
 - If the outcome tier is weak, say performance was weak and what needed to be done differently.
-- Do not balance positives and negatives evenly by default. Lean toward the true result.
-- Do not use vague leadership language.
+- Vary sentence openings. Do not start with the same construction every time.
+- Do not use generic leadership jargon.
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
 - Output plain text only with line breaks. No bullets, labels, or markdown.`
@@ -62,8 +63,8 @@ React to one specific decision the player just made.
 
 Rules:
 - Sound like a senior operator.
-- Be clear, sharp, and concrete.
-- Use the player's first name no more than once.
+- Be clear, sharp, concrete, and direct.
+- Use the player's first name no more than once, and never in the first line.
 - You will be told whether the choice was strong, mixed, or weak. Lean clearly into that judgment.
 - If the choice was strong, say it was the right call and why.
 - If the choice was weak, say it was the wrong call and what should have been done instead.
@@ -72,7 +73,7 @@ Rules:
 - Mention the most important score movements caused by that choice.
 - Mention one likely stakeholder reaction or immediate consequence.
 - Do not force equal positives and negatives in every answer.
-- Do not use vague leadership language.
+- Vary the opening sentence structure. Do not repeatedly start with the player's name or with 'this was'.
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
 - Output plain text only with line breaks. No bullets, labels, or markdown.`;
@@ -102,6 +103,7 @@ Rules:
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         max_output_tokens: 170,
+        temperature: 0.8,
         input: [
           {
             role: "system",
@@ -166,6 +168,17 @@ Decision quality: ${quality.label}
 Decision quality guidance:
 ${quality.guidance}
 
+Allowed opening styles for line 1, choose one and vary across responses:
+- "Right call."
+- "Wrong call."
+- "This landed well."
+- "This created avoidable damage."
+- "A defensible move, but not the best one."
+- "You chose speed over trust here."
+- "You protected process, but gave up momentum."
+- "You stabilized the situation."
+- "This solved the wrong problem."
+
 Score delta from this decision:
 Revenue ${formatDelta(delta.revenue)}
 Team morale ${formatDelta(delta.morale)}
@@ -181,13 +194,13 @@ Speed ${scores?.speed}
 Risk ${scores?.risk}
 
 Write exactly 5 lines:
-Line 1: Give a direct verdict on the choice.
+Line 1: Give a direct verdict on the choice. Do not start with the player's name.
 Line 2: Explain why it was right, mixed, or wrong in this memo.
 Line 3: Explain the biggest business effect from the score movement.
 Line 4: State what one stakeholder is likely to think or do next.
 Line 5: If the choice was weak, say what should have been done instead. If the choice was strong, say what to protect next. If mixed, say what would have made it stronger.
 
-Be decisive.`;
+Be decisive and vary the opening.`;
 }
 
 function buildFinalPrompt({
@@ -201,7 +214,7 @@ function buildFinalPrompt({
   scores: ScoreState;
   outcome: any;
 }) {
-  const overall = classifyOutcome(outcome?.title || "", scores);
+  const overall = classifyOutcome(outcome?.title || "");
 
   return `Player name: ${playerName}
 
@@ -213,6 +226,14 @@ Leadership readout: ${outcome?.readout || ""}
 Overall verdict: ${overall.label}
 Overall guidance:
 ${overall.guidance}
+
+Allowed opening styles for line 1, choose one and vary:
+- "Overall, this was a strong run."
+- "Overall, this was uneven."
+- "Overall, this was not good enough."
+- "You finished in a solid place."
+- "You left too much value on the table."
+- "The result was stronger than the path looked at times."
 
 Final scores:
 Revenue ${scores?.revenue}
@@ -232,13 +253,13 @@ ${history.length
   : "No choices recorded."}
 
 Write exactly 5 lines:
-Line 1: Give a direct overall verdict.
+Line 1: Give a direct overall verdict. Do not start with the player's name.
 Line 2: State the clearest reason the player did well or poorly.
 Line 3: State the biggest weakness or value left on the table.
 Line 4: Explain the business effect of this leadership pattern.
 Line 5: End with a direct bottom-line read.
 
-Be decisive, not balanced by default.`;
+Be decisive and vary the opening.`;
 }
 
 function classifyDecision(delta: ScoreDelta) {
@@ -272,7 +293,7 @@ function classifyDecision(delta: ScoreDelta) {
   };
 }
 
-function classifyOutcome(title: string, scores: ScoreState) {
+function classifyOutcome(title: string) {
   const normalized =
     title === "Elite Operator" || title === "Strong but Uneven"
       ? "strong"
