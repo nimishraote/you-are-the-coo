@@ -50,15 +50,6 @@ Rules:
 - Do not use generic leadership language.
 - Do not use vague abstractions.
 - Do not repeat phrases across responses.
-- Do not use any of these phrases:
-  "real operating call"
-  "not a cosmetic one"
-  "pressure compounds fast"
-  "second-order effect"
-  "pattern behind your decisions"
-  "visible problem"
-  "real story"
-  "how the company experiences your leadership"
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
 - Output plain text only with line breaks. No bullets, labels, or markdown.`
@@ -78,15 +69,6 @@ Rules:
 - Do not use generic leadership language.
 - Do not use vague abstractions.
 - Do not repeat phrases across responses.
-- Do not use any of these phrases:
-  "real operating call"
-  "not a cosmetic one"
-  "pressure compounds fast"
-  "second-order effect"
-  "pattern behind your decisions"
-  "visible problem"
-  "real story"
-  "how the company experiences your leadership"
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
 - Output plain text only with line breaks. No bullets, labels, or markdown.`;
@@ -114,7 +96,8 @@ Rules:
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-5-mini",
+        model: "gpt-4.1-mini",
+        max_output_tokens: 140,
         input: [
           {
             role: "system",
