@@ -17,13 +17,7 @@ type DecisionLogItem = {
   scoresAfter: ScoreState;
 };
 
-type ScoreDelta = {
-  revenue: number;
-  morale: number;
-  trust: number;
-  speed: number;
-  risk: number;
-};
+type DecisionRating = "strong" | "middle" | "weak";
 
 export async function POST(request: Request) {
   try {
@@ -46,17 +40,21 @@ Write a final review based on the player's actual choices, score profile, and ou
 Rules:
 - Sound like a senior operator.
 - Be clear, sharp, concrete, and direct.
-- Use the player's first name no more than once, and never in the first line.
-- Start with a plain verdict on overall performance: strong, mixed, or weak.
-- Lean clearly into the true result. Do not balance positives and negatives evenly by default.
-- If the outcome tier is strong, say the player performed well and why.
-- If the outcome tier is mixed, say the player was uneven and where they left value on the table.
-- If the outcome tier is weak, say performance was weak and what needed to be done differently.
-- Vary sentence openings. Do not start with the same construction every time.
-- Do not use generic leadership jargon.
+- Use the player's first name no more than once, and never in line 1.
+- Do not balance positives and negatives evenly by default.
+- If the overall result is strong, say the player did well.
+- If the overall result is mixed, say the player was uneven.
+- If the overall result is weak, say the player underperformed.
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
-- Output plain text only with line breaks. No bullets, labels, or markdown.`
+- Output plain text only with line breaks. No bullets, labels, or markdown.
+
+Line guidance:
+1. Direct verdict on overall performance.
+2. Clearest reason the run was strong, mixed, or weak.
+3. Biggest weakness or value left on the table.
+4. Business effect of the player's leadership pattern.
+5. Direct bottom-line read.`
         : `You are John, Chief of Staff and Leadership Advisor inside a COO simulation game.
 
 React to one specific decision the player just made.
@@ -64,19 +62,26 @@ React to one specific decision the player just made.
 Rules:
 - Sound like a senior operator.
 - Be clear, sharp, concrete, and direct.
-- Use the player's first name no more than once, and never in the first line.
-- You will be told whether the choice was strong, mixed, or weak. Lean clearly into that judgment.
-- If the choice was strong, say it was the right call and why.
-- If the choice was weak, say it was the wrong call and what should have been done instead.
-- If the choice was mixed, say it was understandable but suboptimal.
-- Mention the exact choice the player made.
-- Mention the most important score movements caused by that choice.
-- Mention one likely stakeholder reaction or immediate consequence.
-- Do not force equal positives and negatives in every answer.
-- Vary the opening sentence structure. Do not repeatedly start with the player's name or with 'this was'.
+- Use the player's first name no more than once, and never in line 1.
+- You will be told whether the choice was strong, middle, or weak. Lean clearly into that judgment.
+- Do not balance positives and negatives evenly by default.
 - Keep it to exactly 5 lines.
 - Each line must be a full sentence.
-- Output plain text only with line breaks. No bullets, labels, or markdown.`;
+- Output plain text only with line breaks. No bullets, labels, or markdown.
+
+Phrasing rules:
+- If rating is strong, line 1 should clearly say the player made the right or best call. The rest should mostly reinforce why it was correct, with only a light caution if needed.
+- If rating is middle, line 1 should clearly say the move was defensible but not the best choice. The rest should explain what stronger move should have been made.
+- If rating is weak, line 1 should clearly say the move was the wrong call. The rest should explain why and what should have been done instead.
+
+Line guidance:
+1. Direct verdict on the choice.
+2. Why the choice was right, middle, or wrong in this memo.
+3. Biggest business effect from the score movement.
+4. Stakeholder reaction or immediate next consequence.
+5. What to protect next if strong, what would have made it stronger if middle, or what should have been done instead if weak.
+
+Do not start every answer the same way. Vary the wording naturally.`;
 
     const userPrompt =
       mode === "final"
@@ -91,7 +96,6 @@ Rules:
             scenario: body?.scenario,
             choice: body?.choice,
             scores: body?.scores,
-            history: body?.history || [],
           });
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -102,8 +106,7 @@ Rules:
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        max_output_tokens: 170,
-        temperature: 0.8,
+        max_output_tokens: 190,
         input: [
           {
             role: "system",
@@ -140,23 +143,17 @@ function buildDecisionPrompt({
   scenario,
   choice,
   scores,
-  history,
 }: {
   playerName: string;
   scenario: any;
   choice: any;
   scores: ScoreState;
-  history: DecisionLogItem[];
 }) {
-  const previousScores = history.length
-    ? history[history.length - 1].scoresAfter
-    : { revenue: 0, morale: 0, trust: 0, speed: 0, risk: 0 };
-
-  const delta = getScoreDelta(previousScores, scores);
-  const quality = classifyDecision(delta);
+  const rating = getDecisionRating(scenario?.id, choice?.label || "");
 
   return `Player name: ${playerName}
 
+Scenario id: ${scenario?.id || ""}
 Scenario subject: ${scenario?.subject || ""}
 Scenario sender: ${scenario?.sender || ""}
 Scenario memo: ${scenario?.memo || ""}
@@ -164,43 +161,25 @@ Scenario memo: ${scenario?.memo || ""}
 Exact choice selected: ${choice?.label || ""}
 Choice outcome summary: ${choice?.synopsis || ""}
 
-Decision quality: ${quality.label}
-Decision quality guidance:
-${quality.guidance}
+Decision rating: ${rating}
 
-Allowed opening styles for line 1, choose one and vary across responses:
-- "Right call."
-- "Wrong call."
-- "This landed well."
-- "This created avoidable damage."
-- "A defensible move, but not the best one."
-- "You chose speed over trust here."
-- "You protected process, but gave up momentum."
-- "You stabilized the situation."
-- "This solved the wrong problem."
-
-Score delta from this decision:
-Revenue ${formatDelta(delta.revenue)}
-Team morale ${formatDelta(delta.morale)}
-Trust ${formatDelta(delta.trust)}
-Speed ${formatDelta(delta.speed)}
-Risk ${formatDelta(delta.risk)}
-
-Current total scores:
+Current total scores after this decision:
 Revenue ${scores?.revenue}
 Team morale ${scores?.morale}
 Trust ${scores?.trust}
 Speed ${scores?.speed}
 Risk ${scores?.risk}
 
-Write exactly 5 lines:
-Line 1: Give a direct verdict on the choice. Do not start with the player's name.
-Line 2: Explain why it was right, mixed, or wrong in this memo.
-Line 3: Explain the biggest business effect from the score movement.
-Line 4: State what one stakeholder is likely to think or do next.
-Line 5: If the choice was weak, say what should have been done instead. If the choice was strong, say what to protect next. If mixed, say what would have made it stronger.
+Judgment map for this game:
+- Scenario 1: option 1 is strong, option 2 is middle, option 3 is weak.
+- Scenario 2: option 3 is strong, option 2 is middle, option 1 is weak.
+- Scenario 3: option 1 is strong, option 2 is middle, option 3 is weak.
+- Scenario 4: option 1 is strong, option 3 is middle, option 2 is weak.
+- Scenario 5: option 3 is strong, option 1 is middle, option 2 is weak.
+- Scenario 6: option 3 is strong, option 2 is middle, option 1 is weak.
+- Scenario 7: option 3 is strong, option 1 is middle, option 2 is weak.
 
-Be decisive and vary the opening.`;
+Be decisive and align the tone to the rating.`;
 }
 
 function buildFinalPrompt({
@@ -223,17 +202,7 @@ Outcome label: ${outcome?.label || ""}
 Outcome summary: ${outcome?.summary || ""}
 Leadership readout: ${outcome?.readout || ""}
 
-Overall verdict: ${overall.label}
-Overall guidance:
-${overall.guidance}
-
-Allowed opening styles for line 1, choose one and vary:
-- "Overall, this was a strong run."
-- "Overall, this was uneven."
-- "Overall, this was not good enough."
-- "You finished in a solid place."
-- "You left too much value on the table."
-- "The result was stronger than the path looked at times."
+Overall verdict: ${overall}
 
 Final scores:
 Revenue ${scores?.revenue}
@@ -247,97 +216,70 @@ ${history.length
   ? history
       .map(
         (item, index) =>
-          `${index + 1}. ${item.subject} | ${item.choiceLabel} | ${item.synopsis}`
+          `${index + 1}. Scenario ${item.scenarioId} | ${item.choiceLabel} | ${item.synopsis}`
       )
       .join("\n")
   : "No choices recorded."}
 
-Write exactly 5 lines:
-Line 1: Give a direct overall verdict. Do not start with the player's name.
-Line 2: State the clearest reason the player did well or poorly.
-Line 3: State the biggest weakness or value left on the table.
-Line 4: Explain the business effect of this leadership pattern.
-Line 5: End with a direct bottom-line read.
-
-Be decisive and vary the opening.`;
+Final review tone rules:
+- If overall verdict is strong, clearly say the player did well overall.
+- If overall verdict is mixed, clearly say the player was uneven overall.
+- If overall verdict is weak, clearly say the player did poorly overall.
+- Do not make the review sound neutral if the result was clearly good or bad.`;
 }
 
-function classifyDecision(delta: ScoreDelta) {
-  const score =
-    delta.revenue * 2 +
-    delta.trust * 2 +
-    delta.morale +
-    delta.speed -
-    delta.risk * 2;
+function getDecisionRating(scenarioId: number, choiceLabel: string): DecisionRating {
+  const normalized = choiceLabel.trim();
 
-  if (score >= 3) {
-    return {
-      label: "strong",
-      guidance:
-        "This was likely the right call. Lean positive. Make that clear. Do not spend equal time on negatives.",
-    };
-  }
-
-  if (score <= -3) {
-    return {
-      label: "weak",
-      guidance:
-        "This was likely the wrong call. Be direct about that. Say what should have been done instead.",
-    };
-  }
-
-  return {
-    label: "mixed",
-    guidance:
-      "This was understandable but not optimal. Explain the tradeoff and what would have made it stronger.",
+  const scenarioChoices: Record<number, { strong: string; middle: string; weak: string }> = {
+    1: {
+      strong: "Move all needed teams into incident mode and send a clear client update immediately",
+      middle: "Let Product and Engineering stabilize first, while account teams hold clients for more details",
+      weak: "Keep communications tightly limited until the problem is fully understood",
+    },
+    2: {
+      strong: "Replace it with a narrower package tied to ROI, partial funding, and fast executive review",
+      middle: "Reset the client expectation now and make clear the package was never approved",
+      weak: "Honor the commitment this one time and work out the funding afterward",
+    },
+    3: {
+      strong: "Take a portfolio approach: cancel the Singapore offsite, reduce discretionary spend, ask VPs for targeted cuts, and push for selective revenue offsets",
+      middle: "Protect core growth bets and make only lighter cuts, counting on stronger commercial performance to close the gap",
+      weak: "Centralize approvals and review all major spend yourself before anything new is committed",
+    },
+    4: {
+      strong: "Address the company directly, explain the business logic, acknowledge the concerns, and make limited changes where justified",
+      middle: "Soften or partially reverse the policy quickly to stabilize morale",
+      weak: "Hold the line and ask managers to reinforce the policy calmly within their teams",
+    },
+    5: {
+      strong: "Reduce scope, protect the most important deliverables, and reposition the work as a phased rollout",
+      middle: "Step in directly, reset owners and milestones, and have a candid recovery conversation with the client",
+      weak: "Let the account team manage the client while internal teams work the problem in the background",
+    },
+    6: {
+      strong: "Form a temporary AI response team across Product, Sales, and Ops to protect pipeline and deliver a 60-day plan",
+      middle: "Stay measured publicly, arm internal teams with stronger talking points, and quietly speed up the real roadmap",
+      weak: "Launch a strong public response now with a clear narrative, selective demos, and a visible market signal",
+    },
+    7: {
+      strong: "Narrow the launch scope, prioritize the most critical markets and materials, and delay the broader rollout",
+      middle: "Appoint one clear launch lead now and force alignment on narrative, audience, and decision rights within a week",
+      weak: "Keep ownership distributed, but run a tight operating cadence with daily reviews to drive alignment",
+    },
   };
+
+  const entry = scenarioChoices[scenarioId];
+  if (!entry) return "middle";
+  if (normalized === entry.strong) return "strong";
+  if (normalized === entry.weak) return "weak";
+  return "middle";
 }
 
-function classifyOutcome(title: string) {
-  const normalized =
-    title === "Elite Operator" || title === "Strong but Uneven"
-      ? "strong"
-      : title === "Holding It Together"
-        ? "mixed"
-        : "weak";
-
-  if (normalized === "strong") {
-    return {
-      label: "strong",
-      guidance:
-        "The player did well overall. Say that clearly. Note the biggest strength first, then the main weakness.",
-    };
-  }
-
-  if (normalized === "weak") {
-    return {
-      label: "weak",
-      guidance:
-        "The player performed poorly overall. Say that clearly. Explain what hurt results most.",
-    };
-  }
-
-  return {
-    label: "mixed",
-    guidance:
-      "The player was uneven overall. Say that clearly. Explain where they left value on the table.",
-  };
-}
-
-function getScoreDelta(previous: ScoreState, current: ScoreState): ScoreDelta {
-  return {
-    revenue: (current?.revenue ?? 0) - (previous?.revenue ?? 0),
-    morale: (current?.morale ?? 0) - (previous?.morale ?? 0),
-    trust: (current?.trust ?? 0) - (previous?.trust ?? 0),
-    speed: (current?.speed ?? 0) - (previous?.speed ?? 0),
-    risk: (current?.risk ?? 0) - (previous?.risk ?? 0),
-  };
-}
-
-function formatDelta(value: number): string {
-  if (value > 0) return `+${value}`;
-  if (value < 0) return `${value}`;
-  return "0";
+function classifyOutcome(title: string): "strong" | "mixed" | "weak" {
+  if (title === "Elite Operator" || title === "Strong but Uneven") return "strong";
+  if (title === "Holding It Together") return "mixed";
+  return "weak";
 }
 
 function extractText(data: any): string {
