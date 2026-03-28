@@ -572,11 +572,8 @@ export default function COOGamePrototype() {
 
       setJohnFeedback(data.text || "");
     } catch (error: any) {
-  console.error(error);
-  setJohnFeedback(`API error: ${error?.message || "Unknown error"}`);
-} finally {
-  setJohnLoading(false);
-};
+      console.error(error);
+      setJohnFeedback(`API error: ${error?.message || "Unknown error"}`);
     } finally {
       setJohnLoading(false);
     }
@@ -677,17 +674,9 @@ export default function COOGamePrototype() {
         }
 
         setFinalReview(data.text || "");
-      } catch (error) {
+      } catch (error: any) {
         console.error(error);
-        const fallbackName = playerName.trim() || "there";
-        setFinalReview(
-          `${fallbackName}, your run shows the kind of operator you become when competing pressures stack up.\n` +
-            `You made some calls that protected the business, and others that exposed where your instincts lean too hard in one direction.\n` +
-            `What matters most is the pattern across all seven decisions, because that is what a real team would feel from you.\n` +
-            `Your strongest moments came when you balanced clarity, execution, and trust at the same time.\n` +
-            `Your weaker moments came when one priority dominated too much and the hidden cost arrived later.\n` +
-            `That is the leadership edge to keep sharpening if you want to scale from capable to exceptional.`
-        );
+        setFinalReview(`API error: ${error?.message || "Unknown error"}`);
       } finally {
         setFinalReviewLoading(false);
       }
