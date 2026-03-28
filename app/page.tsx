@@ -542,6 +542,9 @@ export default function COOGamePrototype() {
     setJohnLoading(true);
     setJohnFeedback("");
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
     try {
       const response = await fetch("/api/john", {
         method: "POST",
@@ -563,18 +566,21 @@ export default function COOGamePrototype() {
           scores: nextScores,
           history,
         }),
+        signal: controller.signal,
       });
 
       const data = await response.json();
+
       if (!response.ok) {
         throw new Error(data?.error || "Unable to get John feedback");
       }
 
-      setJohnFeedback(data.text || "");
-    } catch (error: any) {
+      setJohnFeedback(data.text || "John had no additional comment on this decision.");
+    } catch (error) {
       console.error(error);
-      setJohnFeedback(`API error: ${error?.message || "Unknown error"}`);
+      setJohnFeedback("John is taking longer than expected. You can continue to the next decision.");
     } finally {
+      clearTimeout(timeout);
       setJohnLoading(false);
     }
   };
@@ -655,6 +661,9 @@ export default function COOGamePrototype() {
     setFinalReviewLoading(true);
 
     const run = async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+
       try {
         const response = await fetch("/api/john", {
           method: "POST",
@@ -666,18 +675,21 @@ export default function COOGamePrototype() {
             scores,
             outcome,
           }),
+          signal: controller.signal,
         });
 
         const data = await response.json();
+
         if (!response.ok) {
           throw new Error(data?.error || "Unable to get final review");
         }
 
-        setFinalReview(data.text || "");
-      } catch (error: any) {
+        setFinalReview(data.text || "John had no final review available.");
+      } catch (error) {
         console.error(error);
-        setFinalReview(`API error: ${error?.message || "Unknown error"}`);
+        setFinalReview("John is taking longer than expected. Your result is still ready below.");
       } finally {
+        clearTimeout(timeout);
         setFinalReviewLoading(false);
       }
     };
@@ -896,8 +908,7 @@ export default function COOGamePrototype() {
                 <div className="flex justify-center">
                   <button
                     onClick={next}
-                    disabled={johnLoading}
-                    className="inline-flex items-center gap-3 rounded-2xl bg-[#1B2229] px-6 py-4 text-sm font-medium text-white transition hover:bg-[#222b33] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="inline-flex items-center gap-3 rounded-2xl bg-[#1B2229] px-6 py-4 text-sm font-medium text-white transition hover:bg-[#222b33]"
                   >
                     Continue
                     <ChevronRight className="h-4 w-4" />
