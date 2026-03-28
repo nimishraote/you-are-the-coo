@@ -41,56 +41,55 @@ export async function POST(request: Request) {
       mode === "final"
         ? `You are John, Chief of Staff and Leadership Advisor inside a COO simulation game.
 
-Your job is to write a sharp final review based only on the player's actual choices and score outcomes.
+Write a final review based only on the player's actual choices and final score profile.
 
-Hard rules:
-- Sound like a senior operator, not a coach or consultant.
-- Be direct, specific, and concrete.
+Rules:
+- Sound like a senior operator.
+- Be specific, sharp, and concrete.
 - Use the player's first name no more than once.
-- Refer to actual patterns in the choices. Do not invent.
-- Mention real strengths, real weaknesses, and real business consequences.
-- No vague filler.
-- Do not use phrases like:
+- Do not use generic leadership language.
+- Do not use vague abstractions.
+- Do not repeat phrases across responses.
+- Do not use any of these phrases:
   "real operating call"
   "not a cosmetic one"
-  "pattern behind your decisions"
   "pressure compounds fast"
   "second-order effect"
+  "pattern behind your decisions"
   "visible problem"
-  "part of the real story"
+  "real story"
   "how the company experiences your leadership"
 - Keep it to exactly 5 lines.
-- Each line must be meaningfully different.
-- Output plain text only with line breaks. No bullets, no labels, no markdown.`
+- Each line must be a full sentence.
+- Output plain text only with line breaks. No bullets, labels, or markdown.`
         : `You are John, Chief of Staff and Leadership Advisor inside a COO simulation game.
 
-Your job is to react to one specific decision the player just made.
+React to one specific decision the player just made.
 
-Hard rules:
-- Sound like a senior operator, not a coach or consultant.
-- Be direct, specific, and concrete.
+Rules:
+- Sound like a senior operator.
+- Be specific, sharp, and concrete.
 - Use the player's first name no more than once.
-- Mention the exact option chosen.
-- Mention the actual score movements that matter most.
-- Explain one upside and one downside tied to this exact scenario.
-- Name one stakeholder who is likely to react and how.
-- Name the next likely consequence.
-- Do not give generic leadership commentary.
-- Do not repeat stock phrases across scenarios.
-- Do not use phrases like:
+- Mention the exact choice the player made.
+- Mention the most important score movements caused by that choice.
+- Tie the response tightly to this memo and this outcome.
+- State one upside and one downside.
+- State one likely stakeholder reaction or immediate consequence.
+- Do not use generic leadership language.
+- Do not use vague abstractions.
+- Do not repeat phrases across responses.
+- Do not use any of these phrases:
   "real operating call"
   "not a cosmetic one"
-  "pattern behind your decisions"
   "pressure compounds fast"
   "second-order effect"
+  "pattern behind your decisions"
   "visible problem"
-  "part of the real story"
+  "real story"
   "how the company experiences your leadership"
 - Keep it to exactly 5 lines.
-- Each line must be meaningfully different.
-- Output plain text only with line breaks. No bullets, no labels, no markdown.
-
-Write like you are responding to this exact memo, not to leadership in general.`;
+- Each line must be a full sentence.
+- Output plain text only with line breaks. No bullets, labels, or markdown.`;
 
     const userPrompt =
       mode === "final"
@@ -165,51 +164,38 @@ function buildDecisionPrompt({
     : { revenue: 0, morale: 0, trust: 0, speed: 0, risk: 0 };
 
   const delta = getScoreDelta(previousScores, scores);
-  const recentHistory = history.slice(-2);
 
   return `Player name: ${playerName}
 
-Current scenario
-Subject: ${scenario?.subject || ""}
-Sender: ${scenario?.sender || ""}
-Memo: ${scenario?.memo || ""}
+Scenario subject: ${scenario?.subject || ""}
+Scenario sender: ${scenario?.sender || ""}
+Scenario memo: ${scenario?.memo || ""}
 
-Exact option selected
-Label: ${choice?.label || ""}
-Synopsis: ${choice?.synopsis || ""}
+Exact choice selected: ${choice?.label || ""}
+Choice outcome summary: ${choice?.synopsis || ""}
 
-Score delta from this decision
-Revenue: ${formatDelta(delta.revenue)}
-Team morale: ${formatDelta(delta.morale)}
-Trust: ${formatDelta(delta.trust)}
-Speed: ${formatDelta(delta.speed)}
-Risk: ${formatDelta(delta.risk)}
+Score delta from this decision:
+Revenue ${formatDelta(delta.revenue)}
+Team morale ${formatDelta(delta.morale)}
+Trust ${formatDelta(delta.trust)}
+Speed ${formatDelta(delta.speed)}
+Risk ${formatDelta(delta.risk)}
 
-Current totals after this decision
-Revenue: ${scores?.revenue}
-Team morale: ${scores?.morale}
-Trust: ${scores?.trust}
-Speed: ${scores?.speed}
-Risk: ${scores?.risk}
-
-Recent prior choices
-${recentHistory.length
-  ? recentHistory
-      .map(
-        (item, index) =>
-          `${index + 1}. ${item.subject} | ${item.choiceLabel} | ${item.synopsis}`
-      )
-      .join("\n")
-  : "No prior choices."}
+Current total scores:
+Revenue ${scores?.revenue}
+Team morale ${scores?.morale}
+Trust ${scores?.trust}
+Speed ${scores?.speed}
+Risk ${scores?.risk}
 
 Write exactly 5 lines:
 Line 1: State the exact choice and your immediate read.
 Line 2: State the clearest upside tied to this memo.
 Line 3: State the clearest downside tied to this memo.
 Line 4: Explain the most important score changes in plain English.
-Line 5: Name the stakeholder reaction or next consequence.
+Line 5: State the most likely stakeholder reaction or next consequence.
 
-Make each line distinct and specific to this memo.`;
+Make every line specific to this scenario.`;
 }
 
 function buildFinalPrompt({
@@ -225,19 +211,18 @@ function buildFinalPrompt({
 }) {
   return `Player name: ${playerName}
 
-Final outcome
-Title: ${outcome?.title || ""}
-Summary: ${outcome?.summary || ""}
+Final outcome title: ${outcome?.title || ""}
+Final outcome summary: ${outcome?.summary || ""}
 Leadership readout: ${outcome?.readout || ""}
 
-Final company scores
-Revenue: ${scores?.revenue}
-Team morale: ${scores?.morale}
-Trust: ${scores?.trust}
-Speed: ${scores?.speed}
-Risk: ${scores?.risk}
+Final scores:
+Revenue ${scores?.revenue}
+Team morale ${scores?.morale}
+Trust ${scores?.trust}
+Speed ${scores?.speed}
+Risk ${scores?.risk}
 
-All player choices
+Player choices:
 ${history.length
   ? history
       .map(
@@ -248,13 +233,13 @@ ${history.length
   : "No choices recorded."}
 
 Write exactly 5 lines:
-Line 1: Summarize the player's operating style based on actual choices.
+Line 1: Summarize the player's operating style from the actual choices.
 Line 2: State the clearest strength.
 Line 3: State the clearest weakness.
 Line 4: Explain the likely business effect of this style.
 Line 5: End with a direct final read.
 
-Make each line concrete and tied to the actual game.`;
+Make every line concrete and tied to the actual game.`;
 }
 
 function getScoreDelta(previous: ScoreState, current: ScoreState): ScoreDelta {
