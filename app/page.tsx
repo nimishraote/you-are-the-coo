@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Play,
@@ -273,6 +274,16 @@ const metricMeta: { key: MetricKey; label: string }[] = [
 
 type ScoreState = typeof initialScores;
 type ScenarioChoice = (typeof scenarios)[number]["choices"][number];
+type Scenario = (typeof scenarios)[number];
+
+type DecisionLogItem = {
+  scenarioId: number;
+  subject: string;
+  sender: string;
+  choiceLabel: string;
+  synopsis: string;
+  scoresAfter: ScoreState;
+};
 
 type Outcome = {
   title: string;
@@ -291,6 +302,16 @@ function clamp(n: number) {
 function shiftScore(base: number, delta: number, key: string) {
   const multiplier = key === "risk" ? -6 : 6;
   return clamp(base + delta * multiplier);
+}
+
+function buildNextScores(prev: ScoreState, choice: ScenarioChoice): ScoreState {
+  return {
+    revenue: shiftScore(prev.revenue, choice.effect.revenue, "revenue"),
+    morale: shiftScore(prev.morale, choice.effect.morale, "morale"),
+    trust: shiftScore(prev.trust, choice.effect.trust, "trust"),
+    speed: shiftScore(prev.speed, choice.effect.speed, "speed"),
+    risk: shiftScore(prev.risk, choice.effect.risk, "risk"),
+  };
 }
 
 function getOutcome(scores: ScoreState): Outcome {
@@ -450,12 +471,56 @@ function MetricBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function JohnCard({
+  title,
+  subtitle,
+  body,
+  loading = false,
+}: {
+  title: string;
+  subtitle: string;
+  body: string;
+  loading?: boolean;
+}) {
+  return (
+    <div className="rounded-[28px] border border-[#d5d0c6] bg-[#F4EFE7] p-6 text-[#162129] shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
+      <div className="flex items-start gap-5">
+        <div className="shrink-0 overflow-hidden rounded-[24px] border border-[#d8d0c2] bg-white shadow-sm">
+          <Image
+            src="/john-avatar.svg"
+            alt="John"
+            width={132}
+            height={132}
+            className="h-[132px] w-[132px] object-cover"
+            priority
+          />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-xs uppercase tracking-[0.22em] text-[#5F7D95]">AI Advisor</div>
+          <h3 className="mt-2 text-2xl font-semibold text-[#17222a]">{title}</h3>
+          <div className="mt-2 text-sm text-[#556471]">{subtitle}</div>
+          <div className="mt-5 whitespace-pre-line text-[15px] leading-7 text-[#24323c]">
+            {loading ? "John is reviewing your decision..." : body}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function COOGamePrototype() {
   const [started, setStarted] = useState(false);
+  const [playerName, setPlayerName] = useState("");
   const [step, setStep] = useState(0);
   const [scores, setScores] = useState<ScoreState>(initialScores);
   const [selected, setSelected] = useState<ScenarioChoice | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [decisionLog, setDecisionLog] = useState<DecisionLogItem[]>([]);
+  const [johnFeedback, setJohnFeedback] = useState("");
+  const [johnLoading, setJohnLoading] = useState(false);
+  const [finalReview, setFinalReview] = useState("");
+  const [finalReviewLoading, setFinalReviewLoading] = useState(false);
+  const requestedFinalReview = useRef(false);
 
   const current = scenarios[step];
   const isComplete = step >= scenarios.length;
@@ -463,19 +528,96 @@ export default function COOGamePrototype() {
   const perkTheme = getPerkTheme(outcome.tone);
   const PerkIcon = perkTheme.icon;
 
-  const applyChoice = (choice: ScenarioChoice) => {
+  const requestJohnFeedback = async ({
+    scenario,
+    choice,
+    nextScores,
+    history,
+  }: {
+    scenario: Scenario;
+    choice: ScenarioChoice;
+    nextScores: ScoreState;
+    history: DecisionLogItem[];
+  }) => {
+    setJohnLoading(true);
+    setJohnFeedback("");
+
+    try {
+      const response = await fetch("/api/john", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "decision",
+          playerName: playerName.trim(),
+          scenario: {
+            id: scenario.id,
+            sender: scenario.sender,
+            subject: scenario.subject,
+            memo: scenario.memo,
+          },
+          choice: {
+            label: choice.label,
+            synopsis: choice.synopsis,
+            effect: choice.effect,
+          },
+          scores: nextScores,
+          history,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to get John feedback");
+      }
+
+      setJohnFeedback(data.text || "");
+    } catch (error) {
+      console.error(error);
+      const fallbackName = playerName.trim() || "there";
+      setJohnFeedback(
+        `${fallbackName}, this was a real operating call, not a cosmetic one.\n` +
+          `You solved the immediate issue in front of you, and that matters because pressure compounds fast in a company like this.\n` +
+          `The upside is clear in the near term, but the second-order effect is where I would keep looking.\n` +
+          `Different leaders around you will read this choice differently, especially if they were already tense going in.\n` +
+          `What I am watching most is the pattern behind your decisions, not just this one moment.\n` +
+          `If this becomes your default move under pressure, it will shape how the company experiences your leadership.\n` +
+          `Go into the next situation assuming the visible problem is only part of the real story.`
+      );
+    } finally {
+      setJohnLoading(false);
+    }
+  };
+
+  const applyChoice = async (choice: ScenarioChoice) => {
+    if (!current) return;
+
+    const nextScores = buildNextScores(scores, choice);
+    const nextHistory: DecisionLogItem[] = [
+      ...decisionLog,
+      {
+        scenarioId: current.id,
+        subject: current.subject,
+        sender: current.sender,
+        choiceLabel: choice.label,
+        synopsis: choice.synopsis,
+        scoresAfter: nextScores,
+      },
+    ];
+
     setSelected(choice);
-    setScores((prev) => ({
-      revenue: shiftScore(prev.revenue, choice.effect.revenue, "revenue"),
-      morale: shiftScore(prev.morale, choice.effect.morale, "morale"),
-      trust: shiftScore(prev.trust, choice.effect.trust, "trust"),
-      speed: shiftScore(prev.speed, choice.effect.speed, "speed"),
-      risk: shiftScore(prev.risk, choice.effect.risk, "risk"),
-    }));
+    setScores(nextScores);
+    setDecisionLog(nextHistory);
+    await requestJohnFeedback({
+      scenario: current,
+      choice,
+      nextScores,
+      history: nextHistory,
+    });
   };
 
   const next = () => {
     setSelected(null);
+    setJohnFeedback("");
     setStep((s) => s + 1);
   };
 
@@ -485,6 +627,11 @@ export default function COOGamePrototype() {
     setSelected(null);
     setScores(initialScores);
     setShareCopied(false);
+    setDecisionLog([]);
+    setJohnFeedback("");
+    setFinalReview("");
+    setFinalReviewLoading(false);
+    requestedFinalReview.current = false;
   };
 
   const handleShare = async () => {
@@ -510,6 +657,51 @@ export default function COOGamePrototype() {
     }
   };
 
+  useEffect(() => {
+    if (!isComplete || requestedFinalReview.current) return;
+
+    requestedFinalReview.current = true;
+    setFinalReviewLoading(true);
+
+    const run = async () => {
+      try {
+        const response = await fetch("/api/john", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "final",
+            playerName: playerName.trim(),
+            history: decisionLog,
+            scores,
+            outcome,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data?.error || "Unable to get final review");
+        }
+
+        setFinalReview(data.text || "");
+      } catch (error) {
+        console.error(error);
+        const fallbackName = playerName.trim() || "there";
+        setFinalReview(
+          `${fallbackName}, your run shows the kind of operator you become when competing pressures stack up.\n` +
+            `You made some calls that protected the business, and others that exposed where your instincts lean too hard in one direction.\n` +
+            `What matters most is the pattern across all seven decisions, because that is what a real team would feel from you.\n` +
+            `Your strongest moments came when you balanced clarity, execution, and trust at the same time.\n` +
+            `Your weaker moments came when one priority dominated too much and the hidden cost arrived later.\n` +
+            `That is the leadership edge to keep sharpening if you want to scale from capable to exceptional.`
+        );
+      } finally {
+        setFinalReviewLoading(false);
+      }
+    };
+
+    void run();
+  }, [decisionLog, isComplete, outcome, playerName, scores]);
+
   return (
     <div className="min-h-screen bg-[#121417] text-[#F4F7F8]">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(15,143,107,0.18),transparent_25%),radial-gradient(circle_at_bottom_left,rgba(95,125,149,0.18),transparent_28%)]" />
@@ -520,7 +712,7 @@ export default function COOGamePrototype() {
             <NorthstarLogo />
           </div>
 
-          <div className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="grid flex-1 items-center gap-10 py-12 lg:grid-cols-[1.05fr_0.95fr]">
             <div>
               <div className="mb-4 inline-flex items-center rounded-full border border-[#C7933A]/30 bg-[#C7933A]/10 px-4 py-1 text-xs uppercase tracking-[0.24em] text-[#C7933A]">
                 Executive simulation
@@ -530,14 +722,36 @@ export default function COOGamePrototype() {
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-[#A7B2BA]">
                 Run Northstar Cloud through pressure, trade-offs, and growth. Each
-                decision shapes revenue, trust, morale, speed, and risk. Your outcome
-                depends on how you lead.
+                decision shapes revenue, trust, morale, speed, and risk. John will track
+                how you lead and give you a sharp read after each call.
               </p>
 
-              <div className="mt-10 flex flex-wrap items-center gap-4">
+              <div className="mt-8 max-w-md">
+                <label
+                  htmlFor="player-name"
+                  className="mb-3 block text-xs uppercase tracking-[0.2em] text-[#A7B2BA]"
+                >
+                  Enter your name
+                </label>
+                <input
+                  id="player-name"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && playerName.trim()) {
+                      setStarted(true);
+                    }
+                  }}
+                  placeholder="Your name"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-5 py-4 text-base text-white outline-none transition placeholder:text-[#6f7b84] focus:border-[#0F8F6B]/55"
+                />
+              </div>
+
+              <div className="mt-8 flex flex-wrap items-center gap-4">
                 <button
                   onClick={() => setStarted(true)}
-                  className="inline-flex items-center gap-3 rounded-2xl bg-[#0F8F6B] px-6 py-4 text-base font-medium text-white shadow-[0_10px_40px_rgba(15,143,107,0.35)] transition hover:scale-[1.01] hover:bg-[#119a74]"
+                  disabled={!playerName.trim()}
+                  className="inline-flex items-center gap-3 rounded-2xl bg-[#0F8F6B] px-6 py-4 text-base font-medium text-white shadow-[0_10px_40px_rgba(15,143,107,0.35)] transition enabled:hover:scale-[1.01] enabled:hover:bg-[#119a74] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Play className="h-5 w-5" />
                   Start Day 1
@@ -548,43 +762,18 @@ export default function COOGamePrototype() {
               </div>
             </div>
 
-            <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
-              <div className="rounded-[22px] border border-[#2f3a42] bg-[#D9D3C7] p-6 text-[#152028] shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
-                <div className="mb-5 flex items-center justify-between text-xs uppercase tracking-[0.22em] text-[#5F7D95]">
-                  <span>Northstar Cloud</span>
-                  <span>Company brief</span>
-                </div>
-                <p className="text-sm leading-7 text-[#31404d]">
-                  Northstar Cloud is a fast-growing global technology company serving
-                  major brands and enterprises across 26 markets. The company helps
-                  clients manage digital growth, automation, and customer intelligence.
-                  It has scaled quickly, but pressure is rising across revenue, budgets,
-                  client delivery, product positioning, and internal alignment.
-                </p>
-                <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
-                  {[
-                    ["Employees", "4,800"],
-                    ["Markets", "26"],
-                    ["Annual revenue", "$3.2B"],
-                    ["Enterprise clients", "180"],
-                  ].map(([k, v]) => (
-                    <div key={k} className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4">
-                      <div className="text-xs uppercase tracking-[0.18em] text-[#75818c]">
-                        {k}
-                      </div>
-                      <div className="mt-2 text-2xl font-semibold text-[#1C2228]">
-                        {v}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <JohnCard
+              title={`Hi ${playerName.trim() || "there"}, I am John`}
+              subtitle="Chief of Staff and Leadership Advisor"
+              body={
+                "I will stay with you through the full run. After each decision, I will tell you what your call solved, what tension it created, and what it says about how you operate under pressure. At the end, I will give you a fuller leadership review based on the pattern across all seven choices."
+              }
+            />
           </div>
         </div>
       ) : (
         <div className="relative mx-auto max-w-7xl flex-1 px-6 py-6">
-          <div className="mb-6 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between gap-4">
             <NorthstarLogo compact />
             <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs uppercase tracking-[0.2em] text-[#A7B2BA]">
               Scenario {Math.min(step + 1, scenarios.length)} / {scenarios.length}
@@ -602,7 +791,7 @@ export default function COOGamePrototype() {
           </div>
 
           <AnimatePresence mode="wait">
-            {!isComplete && !selected && (
+            {!isComplete && !selected && current && (
               <motion.div
                 key={`scenario-${current.id}`}
                 initial={{ opacity: 0, y: 20, scale: 0.985 }}
@@ -649,16 +838,14 @@ export default function COOGamePrototype() {
                     {current.choices.map((choice, idx) => (
                       <button
                         key={idx}
-                        onClick={() => applyChoice(choice)}
+                        onClick={() => void applyChoice(choice)}
                         className="group w-full rounded-[24px] border border-white/10 bg-[#1B2229]/75 p-5 text-left transition hover:border-[#0F8F6B]/50 hover:bg-[#1d272f]"
                       >
                         <div className="flex items-start gap-4">
                           <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-white/5 text-xs font-medium text-[#A7B2BA] transition group-hover:bg-[#0F8F6B]/15 group-hover:text-[#F4F7F8]">
                             0{idx + 1}
                           </div>
-                          <div className="text-sm leading-7 text-[#E8EEF0]">
-                            {choice.label}
-                          </div>
+                          <div className="text-sm leading-7 text-[#E8EEF0]">{choice.label}</div>
                         </div>
                       </button>
                     ))}
@@ -667,52 +854,67 @@ export default function COOGamePrototype() {
               </motion.div>
             )}
 
-            {!isComplete && selected && (
+            {!isComplete && selected && current && (
               <motion.div
                 key={`consequence-${current.id}`}
                 initial={{ opacity: 0, y: 24 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -12 }}
                 transition={{ duration: 0.25 }}
-                className="mx-auto max-w-4xl rounded-[32px] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl"
+                className="mx-auto max-w-6xl space-y-6"
               >
-                <div className="rounded-[26px] border border-[#2f3a42] bg-[#D7D0C3] p-8 text-[#162129]">
-                  <div className="text-xs uppercase tracking-[0.22em] text-[#5F7D95]">
-                    What happened next
-                  </div>
-                  <h3 className="mt-3 text-3xl font-semibold">Decision recorded</h3>
-                  <p className="mt-5 text-[15px] leading-8 text-[#31404d]">{selected.synopsis}</p>
+                <div className="rounded-[32px] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
+                  <div className="rounded-[26px] border border-[#2f3a42] bg-[#D7D0C3] p-8 text-[#162129]">
+                    <div className="text-xs uppercase tracking-[0.22em] text-[#5F7D95]">
+                      What happened next
+                    </div>
+                    <h3 className="mt-3 text-3xl font-semibold">Decision recorded</h3>
+                    <p className="mt-5 text-[15px] leading-8 text-[#31404d]">{selected.synopsis}</p>
 
-                  <div className="mt-8 grid gap-3 md:grid-cols-5">
-                    {metricMeta.map((m) => {
-                      const delta = selected.effect[m.key as keyof typeof selected.effect];
-                      const positive = m.key === "risk" ? delta < 0 : delta > 0;
-                      const neutral = delta === 0;
+                    <div className="mt-8 grid gap-3 md:grid-cols-5">
+                      {metricMeta.map((m) => {
+                        const delta = selected.effect[m.key as keyof typeof selected.effect];
+                        const positive = m.key === "risk" ? delta < 0 : delta > 0;
+                        const neutral = delta === 0;
 
-                      return (
-                        <div key={m.key} className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
-                            {m.label}
-                          </div>
+                        return (
                           <div
-                            className={`mt-2 text-xl font-semibold ${
-                              neutral
-                                ? "text-[#1C2228]"
-                                : positive
-                                  ? "text-[#0F8F6B]"
-                                  : "text-[#C65A5A]"
-                            }`}
+                            key={m.key}
+                            className="rounded-2xl border border-[#d5d0c6] bg-white/60 p-4"
                           >
-                            {delta > 0 ? `+${delta}` : delta}
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
+                              {m.label}
+                            </div>
+                            <div
+                              className={`mt-2 text-xl font-semibold ${
+                                neutral
+                                  ? "text-[#1C2228]"
+                                  : positive
+                                    ? "text-[#0F8F6B]"
+                                    : "text-[#C65A5A]"
+                              }`}
+                            >
+                              {delta > 0 ? `+${delta}` : delta}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
+                </div>
 
+                <JohnCard
+                  title={`${playerName.trim()}, here is my read`}
+                  subtitle="Chief of Staff and Leadership Advisor"
+                  body={johnFeedback}
+                  loading={johnLoading}
+                />
+
+                <div className="flex justify-center">
                   <button
                     onClick={next}
-                    className="mt-8 inline-flex items-center gap-3 rounded-2xl bg-[#1B2229] px-6 py-4 text-sm font-medium text-white transition hover:bg-[#222b33]"
+                    disabled={johnLoading}
+                    className="inline-flex items-center gap-3 rounded-2xl bg-[#1B2229] px-6 py-4 text-sm font-medium text-white transition hover:bg-[#222b33] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Continue
                     <ChevronRight className="h-4 w-4" />
@@ -726,101 +928,115 @@ export default function COOGamePrototype() {
                 key="results"
                 initial={{ opacity: 0, scale: 0.97, y: 24 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="mx-auto max-w-6xl overflow-hidden rounded-[34px] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl"
+                className="mx-auto max-w-6xl space-y-6"
               >
-                <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,#14211e_0%,#1b2229_45%,#121417_100%)] p-10 lg:border-b-0 lg:border-r">
-                    <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-[#0F8F6B]/15 blur-3xl" />
-                    <div className="absolute bottom-0 left-0 h-48 w-48 rounded-full bg-[#C7933A]/10 blur-3xl" />
+                <JohnCard
+                  title={`${playerName.trim()}, your leadership review`}
+                  subtitle="Chief of Staff and Leadership Advisor"
+                  body={finalReview}
+                  loading={finalReviewLoading}
+                />
 
-                    <div className="relative z-10">
-                      <div className="text-xs uppercase tracking-[0.24em] text-[#C7933A]">
-                        Final outcome
-                      </div>
-                      <div className="mt-5 inline-flex rounded-full border border-[#C7933A]/25 bg-[#C7933A]/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#E5C07B]">
-                        {outcome.label}
-                      </div>
-                      <h2 className="mt-6 max-w-xl text-5xl font-semibold tracking-tight text-white md:text-6xl">
-                        {outcome.title}
-                      </h2>
-                      <p className="mt-6 max-w-xl text-[16px] leading-8 text-[#A7B2BA]">
-                        {outcome.summary}
-                      </p>
+                <div className="overflow-hidden rounded-[34px] border border-white/10 bg-white/5 shadow-2xl backdrop-blur-xl">
+                  <div className="grid lg:grid-cols-[1.15fr_0.85fr]">
+                    <div className="relative overflow-hidden border-b border-white/10 bg-[linear-gradient(135deg,#14211e_0%,#1b2229_45%,#121417_100%)] p-10 lg:border-b-0 lg:border-r">
+                      <div className="absolute right-0 top-0 h-56 w-56 rounded-full bg-[#0F8F6B]/15 blur-3xl" />
+                      <div className="absolute bottom-0 left-0 h-48 w-48 rounded-full bg-[#C7933A]/10 blur-3xl" />
 
-                      <div className="mt-10 rounded-[24px] border border-white/10 bg-white/5 p-6">
-                        <div className="text-xs uppercase tracking-[0.18em] text-[#A7B2BA]">
-                          Leadership readout
+                      <div className="relative z-10">
+                        <div className="text-xs uppercase tracking-[0.24em] text-[#C7933A]">
+                          Final outcome
                         </div>
-                        <p className="mt-4 text-sm leading-7 text-[#E5EAED]">{outcome.readout}</p>
-                      </div>
-
-                      <div className={`mt-6 rounded-[24px] p-6 ${perkTheme.wrapper}`}>
-                        <div className="flex items-start gap-4">
-                          <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${perkTheme.iconWrap}`}>
-                            <PerkIcon className="h-5 w-5" />
-                          </div>
-                          <div>
-                            <div className={`text-xs uppercase tracking-[0.18em] ${perkTheme.eyebrow}`}>
-                              {outcome.perkTitle}
-                            </div>
-                            <p className={`mt-4 text-sm leading-7 ${perkTheme.body}`}>
-                              {outcome.perk}
-                            </p>
-                          </div>
+                        <div className="mt-5 inline-flex rounded-full border border-[#C7933A]/25 bg-[#C7933A]/10 px-3 py-1 text-[11px] uppercase tracking-[0.18em] text-[#E5C07B]">
+                          {outcome.label}
                         </div>
-                      </div>
+                        <h2 className="mt-6 max-w-xl text-5xl font-semibold tracking-tight text-white md:text-6xl">
+                          {outcome.title}
+                        </h2>
+                        <p className="mt-6 max-w-xl text-[16px] leading-8 text-[#A7B2BA]">
+                          {outcome.summary}
+                        </p>
 
-                      <div className="mt-10 flex flex-wrap gap-4">
-                        <button
-                          onClick={restart}
-                          className="rounded-2xl bg-[#0F8F6B] px-6 py-4 text-sm font-medium text-white transition hover:bg-[#119a74]"
-                        >
-                          Play again
-                        </button>
-                        <button
-                          onClick={handleShare}
-                          className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-medium text-[#F4F7F8] transition hover:bg-white/10"
-                        >
-                          {shareCopied ? "Link copied" : "Share result"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-[#D7D0C3] p-8 text-[#162129]">
-                    <div className="text-xs uppercase tracking-[0.22em] text-[#5F7D95]">
-                      Company scorecard
-                    </div>
-                    <div className="mt-6 space-y-5">
-                      {metricMeta.map((m) => (
-                        <div key={m.key}>
-                          <div className="mb-2 flex items-center justify-between text-sm text-[#45525d]">
-                            <span>{m.label}</span>
-                            <span className="font-semibold text-[#1C2228]">
-                              {scores[m.key as keyof typeof scores]}
-                            </span>
+                        <div className="mt-10 rounded-[24px] border border-white/10 bg-white/5 p-6">
+                          <div className="text-xs uppercase tracking-[0.18em] text-[#A7B2BA]">
+                            Leadership readout
                           </div>
-                          <div className="h-2 overflow-hidden rounded-full bg-[#d9d4cb]">
+                          <p className="mt-4 text-sm leading-7 text-[#E5EAED]">{outcome.readout}</p>
+                        </div>
+
+                        <div className={`mt-6 rounded-[24px] p-6 ${perkTheme.wrapper}`}>
+                          <div className="flex items-start gap-4">
                             <div
-                              className="h-full rounded-full bg-gradient-to-r from-[#5F7D95] via-[#0F8F6B] to-[#C7933A]"
-                              style={{ width: `${scores[m.key as keyof typeof scores]}%` }}
-                            />
+                              className={`flex h-12 w-12 items-center justify-center rounded-2xl ${perkTheme.iconWrap}`}
+                            >
+                              <PerkIcon className="h-5 w-5" />
+                            </div>
+                            <div>
+                              <div className={`text-xs uppercase tracking-[0.18em] ${perkTheme.eyebrow}`}>
+                                {outcome.perkTitle}
+                              </div>
+                              <p className={`mt-4 text-sm leading-7 ${perkTheme.body}`}>
+                                {outcome.perk}
+                              </p>
+                            </div>
                           </div>
                         </div>
-                      ))}
+
+                        <div className="mt-10 flex flex-wrap gap-4">
+                          <button
+                            onClick={restart}
+                            className="rounded-2xl bg-[#0F8F6B] px-6 py-4 text-sm font-medium text-white transition hover:bg-[#119a74]"
+                          >
+                            Play again
+                          </button>
+                          <button
+                            onClick={handleShare}
+                            className="rounded-2xl border border-white/10 bg-white/5 px-6 py-4 text-sm font-medium text-[#F4F7F8] transition hover:bg-white/10"
+                          >
+                            {shareCopied ? "Link copied" : "Share result"}
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="mt-8 grid grid-cols-2 gap-3">
-                      {metricMeta.map((m) => (
-                        <div key={`${m.key}-tile`} className="rounded-2xl border border-[#bfb6a7] bg-[#ece6da] p-4">
-                          <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
-                            {m.label}
+                    <div className="bg-[#D7D0C3] p-8 text-[#162129]">
+                      <div className="text-xs uppercase tracking-[0.22em] text-[#5F7D95]">
+                        Company scorecard
+                      </div>
+                      <div className="mt-6 space-y-5">
+                        {metricMeta.map((m) => (
+                          <div key={m.key}>
+                            <div className="mb-2 flex items-center justify-between text-sm text-[#45525d]">
+                              <span>{m.label}</span>
+                              <span className="font-semibold text-[#1C2228]">
+                                {scores[m.key as keyof typeof scores]}
+                              </span>
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-[#d9d4cb]">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-[#5F7D95] via-[#0F8F6B] to-[#C7933A]"
+                                style={{ width: `${scores[m.key as keyof typeof scores]}%` }}
+                              />
+                            </div>
                           </div>
-                          <div className="mt-2 text-2xl font-semibold text-[#1C2228]">
-                            {scores[m.key as keyof typeof scores]}
+                        ))}
+                      </div>
+
+                      <div className="mt-8 grid grid-cols-2 gap-3">
+                        {metricMeta.map((m) => (
+                          <div
+                            key={`${m.key}-tile`}
+                            className="rounded-2xl border border-[#bfb6a7] bg-[#ece6da] p-4"
+                          >
+                            <div className="text-[11px] uppercase tracking-[0.18em] text-[#75818c]">
+                              {m.label}
+                            </div>
+                            <div className="mt-2 text-2xl font-semibold text-[#1C2228]">
+                              {scores[m.key as keyof typeof scores]}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
