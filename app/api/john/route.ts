@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getVercelOidcToken } from "@vercel/oidc";
 
 type ScoreState = {
   revenue: number;
@@ -23,10 +24,10 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const gatewayToken =
-      process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
+      process.env.AI_GATEWAY_API_KEY || (await getVercelOidcToken());
 
     if (!gatewayToken) {
-      console.error("John AI Gateway auth missing");
+      console.error("John AI Gateway auth missing after OIDC lookup");
       return NextResponse.json(
         { error: "AI Gateway authentication is missing." },
         { status: 500 }
