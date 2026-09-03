@@ -19,22 +19,18 @@ type DecisionLogItem = {
 
 type DecisionRating = "strong" | "middle" | "weak";
 
-const JOHN_MODEL_CANDIDATES = [
-  "gpt-5.6-luna",
-  "gpt-5.6-terra",
-  "gpt-4.1-mini",
-  "gpt-4o-mini",
-] as const;
-
-let cachedJohnModel: string | null = null;
-
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const apiKey = process.env.OPENAI_API_KEY;
+    const gatewayToken =
+      process.env.AI_GATEWAY_API_KEY || process.env.VERCEL_OIDC_TOKEN;
 
-    if (!apiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY is missing." }, { status: 500 });
+    if (!gatewayToken) {
+      console.error("John AI Gateway auth missing");
+      return NextResponse.json(
+        { error: "AI Gateway authentication is missing." },
+        { status: 500 }
+      );
     }
 
     const mode = body?.mode;
@@ -107,113 +103,62 @@ Do not start every answer the same way. Vary the wording naturally.`;
             scores: body?.scores,
           });
 
-    const result = await requestJohnCompletion({ apiKey, systemPrompt, userPrompt });
+    const response = await fetch(
+      "https://ai-gateway.vercel.sh/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${gatewayToken}`,
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-5.6-sol",
+          models: ["google/gemini-3.6-flash"],
+          max_tokens: 220,
+          stream: false,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      }
+    );
 
-    if (!result.ok) {
-      console.error("John OpenAI error", result.error);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error("John AI Gateway error", {
+        status: response.status,
+        code: data?.error?.code,
+        type: data?.error?.type,
+        message: data?.error?.message,
+      });
+
       return NextResponse.json(
-        { error: result.error.message || "OpenAI request failed." },
-        { status: result.error.status || 502 }
+        { error: data?.error?.message || "AI Gateway request failed." },
+        { status: response.status }
       );
     }
 
-    const text = extractText(result.data);
+    const text = extractChatText(data);
 
     if (!text) {
-      console.error("John OpenAI returned no text", {
-        model: result.model,
-        status: result.data?.status,
-        incompleteDetails: result.data?.incomplete_details,
+      console.error("John AI Gateway returned no text", {
+        model: data?.model,
+        finishReason: data?.choices?.[0]?.finish_reason,
       });
-      return NextResponse.json({ error: "John returned an empty response." }, { status: 502 });
+      return NextResponse.json(
+        { error: "John returned an empty response." },
+        { status: 502 }
+      );
     }
 
-    return NextResponse.json({ text, model: result.model });
+    console.info("John AI Gateway success", { model: data?.model });
+    return NextResponse.json({ text });
   } catch (error) {
     console.error("John API error", error);
     return NextResponse.json({ error: "Something went wrong." }, { status: 500 });
   }
-}
-
-async function requestJohnCompletion({
-  apiKey,
-  systemPrompt,
-  userPrompt,
-}: {
-  apiKey: string;
-  systemPrompt: string;
-  userPrompt: string;
-}): Promise<
-  | { ok: true; data: any; model: string }
-  | { ok: false; error: { status: number; code?: string; type?: string; message: string } }
-> {
-  const candidates = cachedJohnModel
-    ? [cachedJohnModel, ...JOHN_MODEL_CANDIDATES.filter((model) => model !== cachedJohnModel)]
-    : [...JOHN_MODEL_CANDIDATES];
-
-  let lastError = {
-    status: 502,
-    code: undefined as string | undefined,
-    type: undefined as string | undefined,
-    message: "No compatible OpenAI model was available.",
-  };
-
-  for (const model of candidates) {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        max_output_tokens: 190,
-        input: [
-          {
-            role: "system",
-            content: [{ type: "input_text", text: systemPrompt }],
-          },
-          {
-            role: "user",
-            content: [{ type: "input_text", text: userPrompt }],
-          },
-        ],
-      }),
-    });
-
-    const data = await response.json().catch(() => ({}));
-
-    if (response.ok) {
-      cachedJohnModel = model;
-      console.info("John OpenAI model selected", { model });
-      return { ok: true, data, model };
-    }
-
-    lastError = {
-      status: response.status,
-      code: data?.error?.code,
-      type: data?.error?.type,
-      message: data?.error?.message || "OpenAI request failed.",
-    };
-
-    const modelUnavailable =
-      response.status === 403 &&
-      (data?.error?.code === "model_not_found" || /does not have access to model/i.test(lastError.message));
-
-    if (modelUnavailable) {
-      console.warn("John model unavailable, trying fallback", {
-        model,
-        status: response.status,
-        code: data?.error?.code,
-      });
-      if (cachedJohnModel === model) cachedJohnModel = null;
-      continue;
-    }
-
-    return { ok: false, error: lastError };
-  }
-
-  return { ok: false, error: lastError };
 }
 
 function buildDecisionPrompt({
@@ -360,19 +305,17 @@ function classifyOutcome(title: string): "strong" | "mixed" | "weak" {
   return "weak";
 }
 
-function extractText(data: any): string {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) {
-    return data.output_text.trim();
+function extractChatText(data: any): string {
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === "string" && content.trim()) {
+    return content.trim();
   }
 
-  const output = Array.isArray(data?.output) ? data.output : [];
-  for (const item of output) {
-    const content = Array.isArray(item?.content) ? item.content : [];
-    for (const entry of content) {
-      if (entry?.type === "output_text" && typeof entry?.text === "string" && entry.text.trim()) {
-        return entry.text.trim();
-      }
-    }
+  if (Array.isArray(content)) {
+    return content
+      .map((part: any) => (typeof part?.text === "string" ? part.text : ""))
+      .join("")
+      .trim();
   }
 
   return "";
