@@ -15,7 +15,7 @@ export async function GET() {
         Authorization: `Bearer ${gatewayToken}`,
       },
       body: JSON.stringify({
-        model: "inclusionai/ling-3.0-tiny-free",
+        model: "poolside/laguna-s-2.1-free",
         max_tokens: 40,
         stream: false,
         messages: [{ role: "user", content: "Reply with exactly: JOHN_OK" }],
