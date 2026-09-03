@@ -113,8 +113,7 @@ Do not start every answer the same way. Vary the wording naturally.`;
           Authorization: `Bearer ${gatewayToken}`,
         },
         body: JSON.stringify({
-          model: "openai/gpt-5.6-sol",
-          models: ["google/gemini-3.6-flash"],
+          model: "poolside/laguna-s-2.1-free",
           max_tokens: 220,
           stream: false,
           messages: [
