@@ -105,7 +105,7 @@ Do not start every answer the same way. Vary the wording naturally.`;
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4.1-mini",
+        model: "gpt-5-mini",
         max_output_tokens: 190,
         input: [
           {
@@ -123,6 +123,13 @@ Do not start every answer the same way. Vary the wording naturally.`;
     const data = await response.json();
 
     if (!response.ok) {
+      console.error("John OpenAI error", {
+        status: response.status,
+        code: data?.error?.code,
+        type: data?.error?.type,
+        message: data?.error?.message,
+      });
+
       return NextResponse.json(
         { error: data?.error?.message || "OpenAI request failed." },
         { status: response.status }
@@ -130,6 +137,14 @@ Do not start every answer the same way. Vary the wording naturally.`;
     }
 
     const text = extractText(data);
+
+    if (!text) {
+      console.error("John OpenAI returned no text", {
+        status: data?.status,
+        incompleteDetails: data?.incomplete_details,
+      });
+      return NextResponse.json({ error: "John returned an empty response." }, { status: 502 });
+    }
 
     return NextResponse.json({ text });
   } catch (error) {
