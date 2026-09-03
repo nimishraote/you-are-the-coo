@@ -113,7 +113,7 @@ Do not start every answer the same way. Vary the wording naturally.`;
           Authorization: `Bearer ${gatewayToken}`,
         },
         body: JSON.stringify({
-          model: "poolside/laguna-s-2.1-free",
+          model: "perplexity/sonar",
           max_tokens: 220,
           stream: false,
           messages: [
