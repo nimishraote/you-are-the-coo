@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://you-are-the-coo.vercel.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://coo.nimishraote.com";
 const description = "You Are the COO by Nimish Raote is an interactive executive decision simulation where you run Northstar Cloud through high-pressure choices across clients, budgets, people, product launches, and risk.";
 
 export const metadata: Metadata = {
